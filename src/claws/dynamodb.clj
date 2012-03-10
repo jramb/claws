@@ -43,7 +43,7 @@ Uses default credentials if none given and default endpoint."
 (defn throughput [r w]
   (doto (ProvisionedThroughput.)
     (.withReadCapacityUnits (long r))
-    (.withWriteCapacityUnits (long w)))))
+    (.withWriteCapacityUnits (long w))))
 
 (defn update-table-request [table-name]
   (doto (UpdateTableRequest.)
@@ -111,7 +111,7 @@ The first parameter is the class, the following xxxx are constructed as .withxxx
 
 (defn put-item
   [client table item]
-  (.putItem client (put-item-request table (to-item item))))
+  (bean (.putItem client (put-item-request table (to-item item)))))
 
 (defn get-item-request
   [table key]
@@ -135,58 +135,61 @@ The first parameter is the class, the following xxxx are constructed as .withxxx
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(def dyndb (dynamodb-client nil "dynamodb.eu-west-1.amazonaws.com"))
-(def tableName "bubbles")
-(def credentials default-credentials)
-(.updateTable dyndb (update-table-throughput tableName 5 5))
-(list-tables dyndb 10 nil)
-(to-item {:a 5, "b" "Hej" "c" [5, 6]})
+(comment
+  
+  (def dyndb (dynamodb-client nil "dynamodb.eu-west-1.amazonaws.com"))
+  (def tableName "bubbles")
+  (def credentials default-credentials)
+  (.updateTable dyndb (update-table-throughput tableName 5 5))
+  (list-tables dyndb 10 nil)
+  (to-item {:a 5, "b" "Hej" "c" [5, 6]})
 
-;; this stores an item. The hash-is the only important thing
-(put-item dyndb tableName {:Domain-UUID "Test"
-                           "a" 99 "b" "Hej!!" :c [4 5 6 7]
-                           :d ["Hipp" "Hopp" "Hej" "Jörg"]})
+  ;; this stores an item. The hash-is the only important thing
+  (put-item dyndb tableName {:Domain-UUID "Test"
+                             "a" 99 "b" "Hej!!" :c [4 5 6 7]
+                             :d ["Hipp" "Hopp" "Hej" "Jörg"]})
 
-(get-item dyndb tableName "Test")
-
-
-
-
-
-;;   // Create a table with a primary key named 'name', which holds a string
-;; CreateTableRequest createTableRequest = new CreateTableRequest().withTableName(tableName)
-;;     .withKeySchema(new KeySchema(new KeySchemaElement().withAttributeName("name").withAttributeType("S")))
-;;     .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(10L).withWriteCapacityUnits(10L));
-;; TableDescription createdTableDescription = dynamoDB.createTable(createTableRequest).getTableDescription();
-;; System.out.println("Created Table: " + createdTableDescription);
-
-;; // Wait for it to become active
-;; waitForTableToBecomeAvailable(tableName);
-
-
-#_(def createTableRequest
-  (doto (CreateTableRequest.)
-    (.withTableName tableName)
-    (.withKeySchema (KeySchema.
-                     (doto (KeySchemaElement.)
-                       (.withAttributeName "name")
-                       (.withAttributeType "S"))))
-    (.withProvisionedThroughput (doto (ProvisionedThroughput.)
-                                  (.withReadCapacityUnits (long 10))
-                                  (.withWriteCapacityUnits (long 10))))))
-
-(.getTableDescription (.createTable dyndb createTableRequest))
-(.getTableDescription )
-
-            ;; CreateTableRequest createTableRequest = new CreateTableRequest().withTableName(tableName)
-            ;;     .withKeySchema(new KeySchema(new KeySchemaElement().withAttributeName("name").withAttributeType("S")))
-            ;;     .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(10L).withWriteCapacityUnits(10L));
-            ;; TableDescription createdTableDescription = dynamoDB.createTable(createTableRequest).getTableDescription();
+  (get-item dyndb tableName "Test")
 
 
 
-(.describeTable
- dynamoDB
- (doto (DescribeTableRequest.)
-   (.withTableName "bubbles")))
 
+
+  ;;   // Create a table with a primary key named 'name', which holds a string
+  ;; CreateTableRequest createTableRequest = new CreateTableRequest().withTableName(tableName)
+  ;;     .withKeySchema(new KeySchema(new KeySchemaElement().withAttributeName("name").withAttributeType("S")))
+  ;;     .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(10L).withWriteCapacityUnits(10L));
+  ;; TableDescription createdTableDescription = dynamoDB.createTable(createTableRequest).getTableDescription();
+  ;; System.out.println("Created Table: " + createdTableDescription);
+
+  ;; // Wait for it to become active
+  ;; waitForTableToBecomeAvailable(tableName);
+
+
+  #_(def createTableRequest
+      (doto (CreateTableRequest.)
+        (.withTableName tableName)
+        (.withKeySchema (KeySchema.
+                         (doto (KeySchemaElement.)
+                           (.withAttributeName "name")
+                           (.withAttributeType "S"))))
+        (.withProvisionedThroughput (doto (ProvisionedThroughput.)
+                                      (.withReadCapacityUnits (long 10))
+                                      (.withWriteCapacityUnits (long 10))))))
+
+  (.getTableDescription (.createTable dyndb createTableRequest))
+  (.getTableDescription )
+
+  ;; CreateTableRequest createTableRequest = new CreateTableRequest().withTableName(tableName)
+  ;;     .withKeySchema(new KeySchema(new KeySchemaElement().withAttributeName("name").withAttributeType("S")))
+  ;;     .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(10L).withWriteCapacityUnits(10L));
+  ;; TableDescription createdTableDescription = dynamoDB.createTable(createTableRequest).getTableDescription();
+
+
+
+  (.describeTable
+   dynamoDB
+   (doto (DescribeTableRequest.)
+     (.withTableName "bubbles")))
+
+)
