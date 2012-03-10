@@ -1,4 +1,6 @@
-(ns claws.common
+(ns ^{:doc "CLAWS common tools"
+      :author "Jörg Ramb"}
+    claws.common
   (:import [com.amazonaws.auth AWSCredentials PropertiesCredentials])
   )
 

@@ -1,4 +1,6 @@
-(ns claws.dynamodb
+(ns ^{:doc "CLAWS DynamoDB"
+      :author "Jörg Ramb"}
+  claws.dynamodb
   (:use [claws.common])
   (:import [com.amazonaws AmazonClientException AmazonServiceException])
   (:import [com.amazonaws.services.dynamodb AmazonDynamoDBClient])
