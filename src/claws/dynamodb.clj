@@ -23,7 +23,36 @@
             UpdateTableRequest
             ListTablesRequest
             GetItemRequest
+            QueryRequest
             ]))
+
+
+(defn av
+  "Converts a value to an AttributeValue, guessing the type"
+  [v]
+  (let [av (AttributeValue.)]
+    (if (seq? v)
+      (if (number? (first v))
+        (.withNS av (object-array v))   ;wants java.util.Collection
+        (.withSS av (object-array (map str v))))
+      (if (number? v)
+        (.withN av (str v)) ;wants String as well...
+        (.withS av (str v))))))
+
+(defn to-item
+  "Convert Clojure map to a plain old HashMap (used for AWS Item)."
+  [m]
+  (java.util.HashMap.
+   (apply conj
+          (map (fn [[k v]]
+                 {(if (keyword? k) (name k) k)
+                  (av v)}) m))))
+
+(defn to-map
+  "Convert plain old HashMap (AWS style item) to good Clojure"
+  [i]
+  (into {} i))
+
 
 
 
@@ -42,37 +71,28 @@ Uses default credentials if none given and default endpoint."
      (doto (AmazonDynamoDBClient. (or credentials (default-credentials)))
        (.setEndpoint endpoint))))
 
-(defn throughput [r w]
-  (doto (ProvisionedThroughput.)
-    (.withReadCapacityUnits (long r))
-    (.withWriteCapacityUnits (long w))))
+(defn throughput
+  "Creates a ProvisionedThroughput "
+  [r w]
+  (set-with (ProvisionedThroughput.)
+            {:read-capacity-units (long r)
+             :write-capacity-units (long r)}))
+
 
 (defn update-table-request [table-name]
-  (doto (UpdateTableRequest.)
-    (.withTableName table-name)))
+  (set-with (UpdateTableRequest.)
+            {:table-name table-name}))
 
 (defn update-table-throughput [table-name r w]
-  (doto (update-table-request table-name)
-    (.withProvisionedThroughput (throughput r w))))
+  (set-with (update-table-request table-name)
+            {:provisioned-throughput (throughput r w)}))
 
-#_(defmacro with->
-  "Like -> but special for the AWS '.withXXXX' forms for no parameter constructors.
-The first parameter is the class, the following xxxx are constructed as .withxxxx"
-  ([x] x)
-  ([x form] (if (seq? form)
-              (with-meta `(~(first form) ~x ~@(next form)) (meta form))
-              (list form x)))
-  ([x form & more] `(-> (-> ~x ~form) ~@more)))
-#_(with-> ListTablesRequest
-  (limit (Integer. limit))
-  (exclusive-start-table-name start-with))
-;;->
 
 (defn list-tables-request
   [limit start-with]
-  (-> (ListTablesRequest.)
-    (.withLimit (Integer. limit))       ;why does (type (int 10)) ;=> java.lang.Long??
-    (.withExclusiveStartTableName start-with)))
+  (set-with (ListTablesRequest.)
+            {:limit (Integer. limit) ;why does (type (int 10)) ;=> java.lang.Long??
+             :exclusive-start-table-name start-with}))
 
 (defn list-tables
   [client limit start-with]
@@ -81,51 +101,76 @@ The first parameter is the class, the following xxxx are constructed as .withxxx
 
 (defn put-item-request
   [table item]
-  (-> (PutItemRequest.)
-      (.withTableName table)
-      (.withItem item)))
+  (set-with (PutItemRequest.)
+            {:table-name table
+             :item item}))
 
-
-(defn to-attribute-value
-  [v]
-  (let [av (AttributeValue.)]
-    (if (seq? v)
-      (if (number? (first v))
-        (.withNS av (object-array v))   ;wants java.util.Collection
-        (.withSS av (object-array (map str v))))
-      (if (number? v)
-        (.withN av (str v)) ;wants String as well...
-        (.withS av (str v))))))
-
-(defn to-item
-  "Convert Clojure map to AWS Item."
-  [m]
-  (java.util.HashMap.
-   (apply conj
-          (map (fn [[k v]]
-                 {(if (keyword? k) (name k) k)
-                  (to-attribute-value v)}) m))))
-
-(defn to-map
-  "Convert AWS style item to good Clojure"
-  [i]
-  (into {} i))
 
 (defn put-item
   [client table item]
   (bean (.putItem client (put-item-request table (to-item item)))))
 
+(comment the API is modelled for .NET as it seems... see if we can beat that (in terms of elegant programmability)
+;;          var request = new QueryRequest
+;; {
+;;   TableName = "Reply",
+;;   HashKeyValue = new AttributeValue { S = "Amazon DynamoDB#DynamoDB Thread 1" }
+;; };
+
+;; var response = client.Query(request);
+;; var result = response.QueryResult;
+
+;; foreach (Dictionary<string, AttributeValue> item in response.QueryResult.Items)
+;; {
+;;   // Process the result.
+;;   PrintItem(item);
+;;  }
+         )
+
+;; m could be
+(comment m could be
+         {:TableName "bubbles"
+          :HashKeyValue (av "Test2")})
+
+#_(let [o (QueryRequest.)]
+  (. o withTableName "bubbles")
+  (. o withHashKeyValue (av "Test2")))
+
+#_(defn make-with
+  "Construct a s-expression to be used in doto"
+  [[setter & parms]]
+  `(~(symbol (str ".with" (name setter))) ~@parms))
+;;(make-with [:Fire 10 22]) -> (.withFire 10 22)
+#_(defmacro map-with [class things]
+  `(doto ~class ~@(map make-with things)))
+
+
+
+;;
+(def m {:tableName "bubbles"
+        :hashKeyValue (av "Test2")})
+(wither (QueryRequest.)
+        {:table-name "bubbles"
+         :hash-key-value (av "Test")})
+
+
+(defn query-request [table hkv]
+  (set-with (QueryRequest.)
+            {:table-name table
+             :hash-key-value hkv}))
+
+
 (defn get-item-request
   [table key]
-  (-> (GetItemRequest.)
-      (.withTableName table)
-      (.withKey key)
-      ;;(.withAttributesToGet (string-array "a" "b" "c"))
-      ))
+  (set-with (GetItemRequest.)
+            {:table-name table
+             :key key
+             ;;:attributes-to-get (string-array "a" "b" "c")
+             }))
 
 (defn a-key [v]
-  (-> (Key.)
-      (.withHashKeyElement (to-attribute-value v))))
+  (set-with (Key.)
+            {:hash-key-element (av v)}))
 
 (defn get-item
   [client table kv]
@@ -145,6 +190,8 @@ The first parameter is the class, the following xxxx are constructed as .withxxx
   (.updateTable dyndb (update-table-throughput tableName 5 5))
   (list-tables dyndb 10 nil)
   (to-item {:a 5, "b" "Hej" "c" [5, 6]})
+  
+  (query-request "bubbles"  (av "Test2"))
 
   ;; this stores an item. The hash-is the only important thing
   (put-item dyndb tableName {:Domain-UUID "Test"

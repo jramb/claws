@@ -8,6 +8,8 @@
 (def dyndb (d/dynamodb-client nil "dynamodb.eu-west-1.amazonaws.com"))
 
 
+(d/list-tables dyndb 10 nil)
+
 (def tableName "bubbles")
 
 (def my-record
