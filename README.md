@@ -65,7 +65,7 @@ Planned
   * More sophisticated select and updates
   * Create and modify tables
 1. S3 support
-1. Maybe SimpleDB support (maybe)
+1. Maybe SimpleDB support
 1. Maybe SQS, SNS, SWF
-1. more, if 
+1. more, if there is interest.
 
