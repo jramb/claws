@@ -67,7 +67,7 @@ you already created a table called `testing`:
 The code is extremely compact compared to the examples
 given on the Amazon documentation...
 
-More examples can be found in the [test/claws/test/dynamodb.clj].
+More examples can be found in the [tests](test/claws/test/dynamodb.clj).
 
 Planned
 -------
