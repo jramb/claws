@@ -35,7 +35,7 @@ Keep this file for yourself, otherwise you might loose money...
 Just saying it.
 
 Now you you can play with for example DynamoDB, it is assumed that
-you already created a table called `testing`:
+you already created a table called `my-table`:
 
     (ns demo.space
         (:require [claws.dynamodb :as d]))
