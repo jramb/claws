@@ -1,5 +1,5 @@
 (ns ^{:doc "Demo of CLAWS"}
-  demo.space
+  claws.test.demo
   (:require [claws.dynamodb :as d]))
 
 (comment
