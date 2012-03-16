@@ -1,4 +1,7 @@
 (defproject claws "0.0.1-SNAPSHOT"
   :description "Clojure wrapper for the Amazon AWS services."
   :dependencies [[org.clojure/clojure "1.3.0"]
-                 [com.amazonaws/aws-java-sdk "1.3.3"]])
+                 [com.amazonaws/aws-java-sdk "1.3.3"]]
+  :dev-dependencies [;;lein plugin install lein-clojars 0.8.0
+                     ;;note to self: to publish: lein push
+                     [lein-marginalia "0.7.0"]])

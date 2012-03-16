@@ -1,7 +1,19 @@
+;; ## Introduction
+;;
+;; This library is my shot at making a wrapper library for
+;; some of the Amazon Web Services. To start with: it is NOT
+;; complete. It is NOT ready for production. I have barely started
+;; and expect major rewrites.
+
+;; My current goal is to implement my personal needs to start with.
+;; I scratch my own itches. This is work in progress for now, hopefully I
+;; can reach a level where CLAWS could be useable for others as well.
+
 (ns ^{:doc "CLAWS DynamoDB"
       :author "Jörg Ramb"}
   claws.dynamodb
   (:use [claws.common])
+  (:import [java.util Collection])
   (:import [com.amazonaws AmazonClientException AmazonServiceException])
   (:import [com.amazonaws.services.dynamodb AmazonDynamoDBClient])
   (:import [com.amazonaws.services.dynamodb.model
@@ -27,19 +39,48 @@
             ]))
 
 
-(defn av
-  "Converts a value to an AttributeValue, guessing the type"
-  [v]
-  (let [av (AttributeValue.)]
-    (if (seq? v)
-      (if (number? (first v))
-        (.withNS av (object-array v))   ;wants java.util.Collection
-        (.withSS av (object-array (map str v))))
-      (if (number? v)
-        (.withN av (str v)) ;wants String as well...
-        (.withS av (str v))))))
+;; ## Internal functions
 
-(defn to-item
+(defn collection-clojure-to-java
+  "Helper function to convert a clojure collection to an AWS Collection (needed for AttributeValues)"
+  [collection]
+  (java.util.Arrays/asList
+   (object-array (apply hash-set (map str collection)))))
+
+(defn collection-java-to-clojure
+  "Helper function to convert an Java Collection to clojure"
+  [^Collection jcoll]
+  (into () jcoll))
+
+;; ## Some basic functions
+
+(defn av
+  "Takes a clojure value and returns a new AttributeValue.
+The type (number, string, number set, string set) is guessed."
+  [v]
+  (let [new-av (AttributeValue.)]
+    (if (coll? v)
+      (if (number? (first v))
+        (.withNS new-av (collection-clojure-to-java v))   ;wants java.util.Collection
+        (.withSS new-av (collection-clojure-to-java v)))
+      (if (number? v)
+        (.withN new-av (str v)) ;wants String as well...
+        (.withS new-av (str v))))))
+
+(defn un-av
+  "Converts an AttributeValue back to a clojure string, number, set of strings och set of numbers,
+depending on the type of the av."
+  [av]
+  (let [bav (bean av)]                  ;FIXME make this more elegant
+    (cond
+      (:n bav) (Long. (:n bav))
+      (:s bav) (:s bav)
+      (:SS bav) (apply hash-set
+                       (collection-java-to-clojure (:SS bav)))
+      (:NS bav) (apply hash-set
+                       (map #(Long. %) (collection-java-to-clojure (:NS bav)))))))
+
+(defn make-item
   "Convert Clojure map to a plain old HashMap (used for AWS Item)."
   [m]
   (java.util.HashMap.
@@ -51,25 +92,33 @@
 (defn to-map
   "Convert plain old HashMap (AWS style item) to good Clojure"
   [i]
-  (into {} i))
+  (into {}
+        (map
+         (fn [[k v]]
+           {(keyword k) (un-av v)})
+         i)))
+
+
+;; End of tools
 
 
 
-
-;; http://docs.amazonwebservices.com/AWSJavaSDK/latest/javadoc/com/amazonaws/services/dynamodb/AmazonDynamoDBClient.html
-;; endpoints: http://docs.amazonwebservices.com/general/latest/gr/rande.html
+;; ## Low level access
+;; Now follows a basic level of encapsulation. Basically
+;; the AWS APIs are wrapped in clojure friendly manner.
 
 (defn dynamodb-client
-  "Creates a DynamoDB client.
-Called: (dynamodb-client [credentials [endpoint]]).
-Uses default credentials if none given and default endpoint."
-  ([]
-     (dynamodb-client (default-credentials)))
-  ([credentials]
-     (AmazonDynamoDBClient. (or credentials (default-credentials))))
-  ([credentials endpoint] 
-     (doto (AmazonDynamoDBClient. (or credentials (default-credentials)))
-       (.setEndpoint endpoint))))
+  "Creates a DynamoDB client. Optional keyword parameters
+are :credentials and :endpoing. Both have defaults.
+
+For possible endpoints go to:
+http://docs.amazonwebservices.com/general/latest/gr/rande.html"
+  [& params]
+  (let [{:keys [endpoint credentials]} params]
+    (let [client (AmazonDynamoDBClient.
+                  (or (:credentials params) (default-credentials)))]
+      (when endpoint (.setEndpoint client endpoint))
+      client)))
 
 (defn throughput
   "Creates a ProvisionedThroughput "
@@ -108,50 +157,16 @@ Uses default credentials if none given and default endpoint."
 
 (defn put-item
   [client table item]
-  (bean (.putItem client (put-item-request table (to-item item)))))
-
-(comment the API is modelled for .NET as it seems... see if we can beat that (in terms of elegant programmability)
-;;          var request = new QueryRequest
-;; {
-;;   TableName = "Reply",
-;;   HashKeyValue = new AttributeValue { S = "Amazon DynamoDB#DynamoDB Thread 1" }
-;; };
-
-;; var response = client.Query(request);
-;; var result = response.QueryResult;
-
-;; foreach (Dictionary<string, AttributeValue> item in response.QueryResult.Items)
-;; {
-;;   // Process the result.
-;;   PrintItem(item);
-;;  }
-         )
-
-;; m could be
-(comment m could be
-         {:TableName "bubbles"
-          :HashKeyValue (av "Test2")})
-
-#_(let [o (QueryRequest.)]
-  (. o withTableName "bubbles")
-  (. o withHashKeyValue (av "Test2")))
-
-#_(defn make-with
-  "Construct a s-expression to be used in doto"
-  [[setter & parms]]
-  `(~(symbol (str ".with" (name setter))) ~@parms))
-;;(make-with [:Fire 10 22]) -> (.withFire 10 22)
-#_(defmacro map-with [class things]
-  `(doto ~class ~@(map make-with things)))
+  (bean (.putItem client (put-item-request table (make-item item)))))
 
 
 
-;;
-(def m {:tableName "bubbles"
-        :hashKeyValue (av "Test2")})
-(wither (QueryRequest.)
-        {:table-name "bubbles"
-         :hash-key-value (av "Test")})
+(comment
+  (def m {:tableName "bubbles"
+          :hashKeyValue (av "Test2")})
+  (set-with (QueryRequest.)
+            {:table-name "bubbles"
+             :hash-key-value (av "Test")}))
 
 
 (defn query-request [table hkv]
@@ -189,7 +204,7 @@ Uses default credentials if none given and default endpoint."
   (def credentials default-credentials)
   (.updateTable dyndb (update-table-throughput tableName 5 5))
   (list-tables dyndb 10 nil)
-  (to-item {:a 5, "b" "Hej" "c" [5, 6]})
+  (make-item {:a 5, "b" "Hej" "c" [5, 6]})
   
   (query-request "bubbles"  (av "Test2"))
 

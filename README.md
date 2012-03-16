@@ -15,8 +15,8 @@ can reach a level where CLAWS could be useable for others as well.
 
 You will need
 -------------
-1) Leiningen
-2) An AWS account
+1. Leiningen
+2. An AWS account
 
 
 Examples
