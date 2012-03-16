@@ -36,6 +36,8 @@
             ListTablesRequest
             GetItemRequest
             QueryRequest
+            DescribeTableRequest
+            ResourceNotFoundException
             ]))
 
 
@@ -120,6 +122,12 @@ http://docs.amazonwebservices.com/general/latest/gr/rande.html"
       (when endpoint (.setEndpoint client endpoint))
       client)))
 
+(defn a-key
+  "Constructs a Key object. The key value v is converted to an attribute value."
+  [v]
+  (set-with (Key.)
+            {:hash-key-element (av v)}))
+
 (defn throughput
   "Creates a ProvisionedThroughput "
   [r w]
@@ -176,84 +184,43 @@ http://docs.amazonwebservices.com/general/latest/gr/rande.html"
 
 
 (defn get-item-request
-  [table key]
-  (set-with (GetItemRequest.)
-            {:table-name table
-             :key key
-             ;;:attributes-to-get (string-array "a" "b" "c")
-             }))
+  "Produces a GetItemRequest with some options:
+:attributes can be a list of attributes to fetch (default is all).
+:consistent-read enables consisten read."
+  [table key params]
+  (let [ir (GetItemRequest.)
+        {:keys [attributes consistent-read]} params]
+    (set-with ir
+              {:table-name table
+               :key key
+               ;;:attributes-to-get (string-array "a" "b" "c")
+               })
+    (when attributes
+      (set-with ir
+                {:attributes-to-get
+                 (collection-clojure-to-java
+                  (map name attributes))}))
+    (when consistent-read
+      (set-with ir
+                {:consistent-read consistent-read}))
+    ir))
 
-(defn a-key [v]
-  (set-with (Key.)
-            {:hash-key-element (av v)}))
+
 
 (defn get-item
-  [client table kv]
+  [client table kv & params]
   (to-map
    (.getItem
-    (.getItem client (get-item-request table (a-key kv))))))
+    (.getItem client (get-item-request table (a-key kv)
+                                       (apply hash-map params))))))
 
 
+(defn describe-table
+  [client table]
+  (try
+    (bean (.getTable
+           (.describeTable client
+                           (set-with (DescribeTableRequest.)
+                                     {:table-name table}))))
+    (catch ResourceNotFoundException e nil)))
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(comment
-  
-  (def dyndb (dynamodb-client nil "dynamodb.eu-west-1.amazonaws.com"))
-  (def tableName "bubbles")
-  (def credentials default-credentials)
-  (.updateTable dyndb (update-table-throughput tableName 5 5))
-  (list-tables dyndb 10 nil)
-  (make-item {:a 5, "b" "Hej" "c" [5, 6]})
-  
-  (query-request "bubbles"  (av "Test2"))
-
-  ;; this stores an item. The hash-is the only important thing
-  (put-item dyndb tableName {:Domain-UUID "Test"
-                             "a" 99 "b" "Hej!!" :c [4 5 6 7]
-                             :d ["Hipp" "Hopp" "Hej" "Jörg"]})
-
-  (get-item dyndb tableName "Test")
-
-
-
-
-
-  ;;   // Create a table with a primary key named 'name', which holds a string
-  ;; CreateTableRequest createTableRequest = new CreateTableRequest().withTableName(tableName)
-  ;;     .withKeySchema(new KeySchema(new KeySchemaElement().withAttributeName("name").withAttributeType("S")))
-  ;;     .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(10L).withWriteCapacityUnits(10L));
-  ;; TableDescription createdTableDescription = dynamoDB.createTable(createTableRequest).getTableDescription();
-  ;; System.out.println("Created Table: " + createdTableDescription);
-
-  ;; // Wait for it to become active
-  ;; waitForTableToBecomeAvailable(tableName);
-
-
-  #_(def createTableRequest
-      (doto (CreateTableRequest.)
-        (.withTableName tableName)
-        (.withKeySchema (KeySchema.
-                         (doto (KeySchemaElement.)
-                           (.withAttributeName "name")
-                           (.withAttributeType "S"))))
-        (.withProvisionedThroughput (doto (ProvisionedThroughput.)
-                                      (.withReadCapacityUnits (long 10))
-                                      (.withWriteCapacityUnits (long 10))))))
-
-  (.getTableDescription (.createTable dyndb createTableRequest))
-  (.getTableDescription )
-
-  ;; CreateTableRequest createTableRequest = new CreateTableRequest().withTableName(tableName)
-  ;;     .withKeySchema(new KeySchema(new KeySchemaElement().withAttributeName("name").withAttributeType("S")))
-  ;;     .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(10L).withWriteCapacityUnits(10L));
-  ;; TableDescription createdTableDescription = dynamoDB.createTable(createTableRequest).getTableDescription();
-
-
-
-  (.describeTable
-   dynamoDB
-   (doto (DescribeTableRequest.)
-     (.withTableName "bubbles")))
-
-)

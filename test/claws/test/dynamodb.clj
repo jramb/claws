@@ -32,8 +32,20 @@
                              :d-str-set #{"Hipp" "Hopp" "Hej" "Jörg"}}]
       ;; First put the item into the table
       (d/put-item db test-table test-record)
+      
       ;; Now fetch it back and see if it is as expected
       (let [r2 (d/get-item db test-table (:Id test-record))]
         ;; should be no surprises here
-        (is (= r2 reference-record) "fetched record same as reference (expected) record")))
+        (is (= r2 reference-record) "fetched record same as reference (expected) record"))
+      
+      ;; Fetch only some columns
+      (let [only-attrib [:a-number :c-num-set]
+            r2 (d/get-item db test-table (:Id test-record) :attributes only-attrib)]
+        (is (= r2 (select-keys reference-record only-attrib))
+            "fetched record same as reference record (only requested attribs)"))
+
+      ;; Query information about the table
+      (is (d/describe-table db test-table) "could query information about the table")
+      (is (nil? (d/describe-table db "no-such")) "non-existent table described as nil")
+      )
     (.shutdown db)))

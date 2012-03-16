@@ -37,27 +37,37 @@ Just saying it.
 Now you you can play with for example DynamoDB, it is assumed that
 you already created a table called `testing`:
 
-    (ns yourns
-        (:require [claws.dynamodb :as dyn]))
+    (ns demo.space
+        (:require [claws.dynamodb :as d]))
 
     ;; create a client with default credentials (according your property file)
     (def dyndb (d/dynamodb-client))
     
     ;; write a record to your table.
-    ;; records are hash maps with either String och keyword keys.
-    ;; The values are either number, String, sequence of numbers or sequence of Strings.
+    ;; records are hash maps can have either String och keyword keys.
+    ;; The values are either number, String, sequence of numbers or sequence of Strings
+    ;; (only unique values are accepted).
     ;; Sequences may not mix types, i e you can not have boths numbers and Strings in one of them.
     (d/put-item dyndb "my-table"
-      {:hash-key "Test2"
+      {:hash-key "test-2"
        "a" 99
-       "b" "Hej!!" :c [4 5 6 7]
+       "b" "Hej!!"
+       :c [4 5 6 7]
        :d ["Hipp" "Hopp" "Hej" "Jörg"]})
 
     ;; and read it
     (d/get-item dyndb "my-table" "Test2")
+    ;; -> {:hash-key "test-2"
+       :a 99
+       :b "Hej!!"
+       :c #{4 5 6 7}
+       :d #{"Hipp" "Hopp" "Hej" "Jörg"}}
 
-Quite simple for the momement, but the code is extremely short compared to the examples
-given on the Amazon documentation.
+
+The code is extremely compact compared to the examples
+given on the Amazon documentation...
+
+More examples can be found in the [test/claws/test/dynamodb.clj].
 
 Planned
 -------
