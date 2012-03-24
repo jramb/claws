@@ -14,12 +14,14 @@
   ;; (def dyndb (d/dynamodb-client :endpoint "dynamodb.eu-west-1.amazonaws.com"))
   (let [db (d/dynamodb-client :endpoint "dynamodb.eu-west-1.amazonaws.com")]
     (is db "We could open the EU instance")
-    (.shutdown db))
+    (d/shutdown db))
   (is (number? (invoke-instance-method-m "getTime" test-time)) "invoke-instance-method-m works"))
 
 
 (deftest basic
   (let [db (d/dynamodb-client)]
+    (add-watch (:cu db) 1
+               (fn [key ref old new] (println "CU increased by " (- new old) " to " new)))
     (is (d/list-tables db :limit 10) "Some tables exist")
     (let [test-table "Claws-Demo"
           id (str "Test-" test-time)
@@ -42,10 +44,12 @@
       (let [r2 (d/get-item db test-table (:Id test-record))]
         ;; should be no surprises here
         (is (= r2 reference-record) "fetched record same as reference (expected) record"))
+      (is (nil? (d/get-item db test-table "no such key")) "Fetching nonexisten key returns nil")
       
       ;; Fetch only some columns
       (let [only-attrib [:a-number :c-num-set]
-            r2 (d/get-item db test-table (:Id test-record) :attributes only-attrib)]
+            r2 (d/get-item db test-table (:Id test-record)
+                           :attributes only-attrib)]
         (is (= r2 (select-keys reference-record only-attrib))
             "fetched record same as reference record (only requested attribs)"))
 
@@ -53,4 +57,4 @@
       (is (d/describe-table db test-table) "could query information about the table")
       (is (nil? (d/describe-table db "no-such")) "non-existent table described as nil")
       )
-    (.shutdown db)))
+    (d/shutdown db)))

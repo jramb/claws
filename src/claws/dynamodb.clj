@@ -40,6 +40,11 @@
             ResourceNotFoundException
             ]))
 
+(defn inc-cu
+  "Increments the clients consumed units by d"
+  [client d]
+  (swap! (:cu client) + d))
+
 
 ;; ## Internal functions
 
@@ -94,11 +99,12 @@ depending on the type of the av."
 (defn to-map
   "Convert plain old HashMap (AWS style item) to good Clojure"
   [i]
-  (into {}
-        (map
-         (fn [[k v]]
-           {(keyword k) (un-av v)})
-         i)))
+  (when i
+    (into {}
+          (map
+           (fn [[k v]]
+             {(keyword k) (un-av v)})
+           i))))
 
 
 ;; End of tools
@@ -120,7 +126,11 @@ http://docs.amazonwebservices.com/general/latest/gr/rande.html"
     (let [client (AmazonDynamoDBClient.
                   (or (:credentials params) (default-credentials)))]
       (when endpoint (.setEndpoint client endpoint))
-      client)))
+      {:db client
+       :cu (atom 0)})))
+
+(defn shutdown [db]
+  (.shutdown (:db db)))
 
 (defn a-key
   "Constructs a Key object. The key value v is converted to an attribute value."
@@ -156,7 +166,7 @@ http://docs.amazonwebservices.com/general/latest/gr/rande.html"
 (defn list-tables
   [client & params]
   (seq (.getTableNames
-        (.listTables client (list-tables-request params)))))
+        (.listTables (:db client) (list-tables-request params)))))
 
 (defn put-item-request
   [table item]
@@ -167,7 +177,9 @@ http://docs.amazonwebservices.com/general/latest/gr/rande.html"
 
 (defn put-item
   [client table item]
-  (bean (.putItem client (put-item-request table (make-item item)))))
+  (when-let [pir (.putItem (:db client) (put-item-request table (make-item item)))]
+    (inc-cu client (.getConsumedCapacityUnits pir))
+    (bean pir)))
 
 
 
@@ -179,7 +191,7 @@ http://docs.amazonwebservices.com/general/latest/gr/rande.html"
              :hash-key-value (av "Test")}))
 
 
-(defn query-request [table hkv]
+(defn query-request [table hkv & params]
   (set-with (QueryRequest.)
             {:table-name table
              :hash-key-value hkv}))
@@ -211,17 +223,20 @@ http://docs.amazonwebservices.com/general/latest/gr/rande.html"
 
 (defn get-item
   [client table kv & params]
-  (to-map
-   (.getItem
-    (.getItem client (get-item-request table (a-key kv)
-                                       (apply hash-map params))))))
+  (when-let [gir (.getItem (:db client) (get-item-request table (a-key kv)
+                                       (apply hash-map params)))
+             ;; -> GetItemResult
+             ]
+    (inc-cu client (.getConsumedCapacityUnits gir))
+    (to-map
+     (.getItem gir))))
 
 
 (defn describe-table
   [client table]
   (try
     (bean (.getTable
-           (.describeTable client
+           (.describeTable (:db client)
                            (set-with (DescribeTableRequest.)
                                      {:table-name table}))))
     (catch ResourceNotFoundException e nil)))
