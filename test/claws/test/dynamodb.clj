@@ -5,17 +5,22 @@
 
 (def test-time (java.util.Date.))
 
+(comment
+  (d/dynamodb-client :endpoint "dynamodb.eu-west-1.amazonaws.com")
+  (d/list-tables-request {:limit (Integer. 10)}))
+
 (deftest basic-eu
   ;; to use the EU instance, use:
   ;; (def dyndb (d/dynamodb-client :endpoint "dynamodb.eu-west-1.amazonaws.com"))
   (let [db (d/dynamodb-client :endpoint "dynamodb.eu-west-1.amazonaws.com")]
     (is db "We could open the EU instance")
-    (.shutdown db)))
+    (.shutdown db))
+  (is (number? (invoke-instance-method-m "getTime" test-time)) "invoke-instance-method-m works"))
 
 
 (deftest basic
   (let [db (d/dynamodb-client)]
-    (is (d/list-tables db 10 nil) "Some tables exist")
+    (is (d/list-tables db :limit 10) "Some tables exist")
     (let [test-table "Claws-Demo"
           id (str "Test-" test-time)
           test-record       {:Id id     ;the key is important

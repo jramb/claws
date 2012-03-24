@@ -144,17 +144,19 @@ http://docs.amazonwebservices.com/general/latest/gr/rande.html"
   (set-with (update-table-request table-name)
             {:provisioned-throughput (throughput r w)}))
 
-
 (defn list-tables-request
-  [limit start-with]
-  (set-with (ListTablesRequest.)
-            {:limit (Integer. limit) ;why does (type (int 10)) ;=> java.lang.Long??
-             :exclusive-start-table-name start-with}))
+  [params]
+  (let [ltr (ListTablesRequest.)]
+    (when (contains? params :limit)
+      (set-with ltr {:limit (Integer. (:limit params))}))
+    (when (contains? params :start)
+      (set-with ltr {:exclusive-start-table-name (:start params)}))
+    ltr))
 
 (defn list-tables
-  [client limit start-with]
+  [client & params]
   (seq (.getTableNames
-        (.listTables client (list-tables-request limit start-with)))))
+        (.listTables client (list-tables-request params)))))
 
 (defn put-item-request
   [table item]
