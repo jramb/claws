@@ -129,14 +129,25 @@ http://docs.amazonwebservices.com/general/latest/gr/rande.html"
       {:db client
        :cu (atom 0)})))
 
+
 (defn shutdown [db]
   (.shutdown (:db db)))
+
+;; # These create some helper objects used below
 
 (defn a-key
   "Constructs a Key object. The key value v is converted to an attribute value."
   [v]
   (set-with (Key.)
             {:hash-key-element (av v)}))
+
+(defn key-schema
+  "Name is the name of the key attribute, type is N or S"
+  [name type]
+  (set-with (KeySchema.)
+            {:hash-key-element (set-with (KeySchemaElement.)
+                                         {:attibute-name name
+                                          :attribute-type type})}))
 
 (defn throughput
   "Creates a ProvisionedThroughput "
@@ -145,14 +156,16 @@ http://docs.amazonwebservices.com/general/latest/gr/rande.html"
             {:read-capacity-units (long r)
              :write-capacity-units (long r)}))
 
+(defn create-table-request
+  [table-name key-schema throughput]
+  (set-with (CreateTableRequest.)
+            {:table-name table-name
+             :key-schema key-schema
+             :provisioned-thoughput throughput}))
 
 (defn update-table-request [table-name]
   (set-with (UpdateTableRequest.)
             {:table-name table-name}))
-
-(defn update-table-throughput [table-name r w]
-  (set-with (update-table-request table-name)
-            {:provisioned-throughput (throughput r w)}))
 
 (defn list-tables-request
   [params]
@@ -163,11 +176,6 @@ http://docs.amazonwebservices.com/general/latest/gr/rande.html"
       (set-with ltr {:exclusive-start-table-name (:start params)}))
     ltr))
 
-(defn list-tables
-  [client & params]
-  (seq (.getTableNames
-        (.listTables (:db client) (list-tables-request params)))))
-
 (defn put-item-request
   [table item]
   (set-with (PutItemRequest.)
@@ -175,27 +183,10 @@ http://docs.amazonwebservices.com/general/latest/gr/rande.html"
              :item item}))
 
 
-(defn put-item
-  [client table item]
-  (when-let [pir (.putItem (:db client) (put-item-request table (make-item item)))]
-    (inc-cu client (.getConsumedCapacityUnits pir))
-    (bean pir)))
-
-
-
-(comment
-  (def m {:tableName "bubbles"
-          :hashKeyValue (av "Test2")})
-  (set-with (QueryRequest.)
-            {:table-name "bubbles"
-             :hash-key-value (av "Test")}))
-
-
 (defn query-request [table hkv & params]
   (set-with (QueryRequest.)
             {:table-name table
              :hash-key-value hkv}))
-
 
 (defn get-item-request
   "Produces a GetItemRequest with some options:
@@ -221,6 +212,24 @@ http://docs.amazonwebservices.com/general/latest/gr/rande.html"
 
 
 
+;; The "DOERS"
+
+(defn update-table-throughput [table-name r w]
+  (set-with (update-table-request table-name)
+            {:provisioned-throughput (throughput r w)}))
+
+(defn list-tables
+  [client & params]
+  (seq (.getTableNames
+        (.listTables (:db client) (list-tables-request params)))))
+
+(defn put-item
+  [client table item]
+  (when-let [pir (.putItem (:db client) (put-item-request table (make-item item)))]
+    (inc-cu client (.getConsumedCapacityUnits pir))
+    (bean pir)))
+
+
 (defn get-item
   [client table kv & params]
   (when-let [gir (.getItem (:db client) (get-item-request table (a-key kv)
@@ -240,4 +249,15 @@ http://docs.amazonwebservices.com/general/latest/gr/rande.html"
                            (set-with (DescribeTableRequest.)
                                      {:table-name table}))))
     (catch ResourceNotFoundException e nil)))
+
+(defn create-table
+  [client table-name key-attribute key-type r w]
+  (let [ctr (create-table-request
+             table-name
+             (key-schema key-attribute key-type)
+             (throughput r w))]
+    (bean (.createTable client ctr))))
+
+;; TODO: delete-table
+;; 
 
