@@ -143,6 +143,7 @@ are converted into exists-checks, values into value-checks."
                     (av v)))})
               m))))
 
+(make-expected-attributes {:no-such true})
 ;; End of tools
 
 
@@ -171,11 +172,17 @@ http://docs.amazonwebservices.com/general/latest/gr/rande.html"
 ;; # These create some helper objects used below
 
 (defn a-key
-  "Constructs a Key object. The key value v is converted to an attribute value."
-  [v]
-  (set-with (Key.)
-            {:hash-key-element (av v)}))
+  "Constructs a Key object. The key value k is
+either a list of hash and range key or just the hash.
+The values are converted to an attribute value."
+  ;; single hash-key table
+  [k]
+  (if (coll? k)
+    (let [[h r] k]
+      (Key. (av h) (av r)))
+    (Key. (av k))))
 
+;; FIXME: range!
 (defn key-schema
   "Name is the name of the key attribute, type is N or S"
   [name type]

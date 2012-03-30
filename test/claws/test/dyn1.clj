@@ -1,4 +1,4 @@
-(ns claws.test.dynamodb
+(ns claws.test.dyn1
   (:require [claws.dynamodb :as d])
   (:use [claws.common])
   (:use [clojure.test]))
@@ -43,7 +43,7 @@
       (d/put-item db test-table test-record)
 
       ;; Now fetch it back and see if it is as expected
-      (let [r2 (d/get-item db test-table (:Id test-record))]
+      (let [r2 (d/get-item db test-table id)]
         ;; should be no surprises here
         (is (= r2 reference-record) "fetched record same as reference (expected) record"))
 
@@ -67,7 +67,7 @@
 
       ;; delete with a false expectation
       (d/delete-item db test-table id :expected {:a-number nil})
-      ;;;; FAILS? (d/delete-item db test-table id :expected {:no-such true})
+      ;; not possible to just check if a value exists: (d/delete-item db test-table id :expected {:no-such true}) ;; fails!
       (d/delete-item db test-table id :expected {:a-number 123})
       ;; since the expectation should fail, the item is still there
       (is (d/get-item db test-table id :attributes []) "Deleted item is still there")
@@ -76,9 +76,10 @@
       (d/delete-item db test-table id)
       ;; Now the item should be gone
       (is (nil? (d/get-item db test-table id)) "Deleted item is gone")
-      
+
       ;; Query information about the table
       (is (d/describe-table db test-table) "could query information about the table")
       (is (nil? (d/describe-table db "no-such")) "non-existent table described as nil")
       )
     (d/shutdown db)))
+
