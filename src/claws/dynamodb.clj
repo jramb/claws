@@ -264,12 +264,31 @@ The values are converted to an attribute value."
                 {:consistent-read consistent-read}))
     ir))
 
-(defn delete-item-request
+(defn- delete-item-request
   [table key parmap]
   (let [{:keys [expected return-values]} parmap
         req (DeleteItemRequest. table key)
         req (if expected (set-with req {:expected (make-expected-attributes expected)}) req)
         req (if return-values (set-with req {:return-values return-values}) req)]
+    req))
+
+
+
+;;(macroexpand-1 '(optional-with-this obj what))
+
+(defn- query-request
+  [table key parmap]
+  (let [{:keys [attributes-to-get consistent-read count exclusive-start-key
+                limit range-condition scan-index-forward]} parmap
+        req (QueryRequest. table key)
+        req (optional-with-this req attributes-to-get)
+        req (optional-with-this req consistent-read (boolean consistent-read))
+        req (optional-with-this req count (boolean count))
+        req (optional-with-this req exclusive-start-key)
+        req (optional-with-this req limit)
+        req (optional-with-this req range-condition)
+        req (optional-with-this req scan-index-forward (boolean scan-index-forward))
+        ]
     req))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -337,8 +356,11 @@ in the form [v a], where a i one of :add, :put, :delete."
   "FIXME")
 
 (defn query
-  []
-  "FIXME")
+  [client table key & params]
+  (when-let [res (.query (:db client) (query-request table (a-key key) (apply hash-map params)))]
+    (inc-cu client (.getConsumedCapacityUnits res))
+    (bean res)                          ;FIXME
+    ))
 
 (defn scan
   []

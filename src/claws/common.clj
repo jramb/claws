@@ -80,5 +80,9 @@
                (invoke-instance-method setter object value)))))
   object)
 
-
+(defmacro optional-with-this
+  ([obj what]
+     `(optional-with-this ~obj ~what ~what))
+  ([obj what set-to]
+     `(if ~what (set-with ~obj {~(keyword what) ~set-to}) ~obj)))
 
