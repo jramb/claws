@@ -18,26 +18,30 @@
   (:import [com.amazonaws.services.dynamodb AmazonDynamoDBClient])
   (:import [com.amazonaws.services.dynamodb.model
             AttributeValue
+            AttributeValueUpdate
             ComparisonOperator
             Condition
+            ConditionalCheckFailedException
             CreateTableRequest
+            DeleteItemRequest
             DescribeTableRequest
+            ExpectedAttributeValue
             Key
             KeySchema
             KeySchemaElement
             ProvisionedThroughput
             PutItemRequest
             PutItemResult
+            ResourceNotFoundException
             ScanRequest
             ScanResult
             TableDescription
             TableStatus
+            UpdateItemRequest
             UpdateTableRequest
             ListTablesRequest
             GetItemRequest
             QueryRequest
-            DescribeTableRequest
-            ResourceNotFoundException
             ]))
 
 (defn inc-cu
@@ -94,7 +98,8 @@ depending on the type of the av."
    (apply conj
           (map (fn [[k v]]
                  {(if (keyword? k) (name k) k)
-                  (av v)}) m))))
+                  (av v)})
+               m))))
 
 (defn to-map
   "Convert plain old HashMap (AWS style item) to good Clojure"
@@ -106,9 +111,39 @@ depending on the type of the av."
              {(keyword k) (un-av v)})
            i))))
 
+(defn make-update-attributes
+  "m is a clojure map where the keys are :k or k and the values
+are [v a], where a is one of :delete, :put, :add (add only for set attributes)"
+  [m]
+  (java.util.HashMap.
+   (into {}
+         (map (fn [[k [v a]]]
+                {(if (keyword? k) (name k) k)
+                 (AttributeValueUpdate.
+                  (av v)
+                  (condp = a
+                    :add "ADD"
+                    :put "PUT"
+                    :delete "DELETE"
+                    a))})
+              m))))
+
+(defn make-expected-attributes
+  "m is a clojure map where the keys are :k or k and the values
+are either boolean or normal values. Booleans
+are converted into exists-checks, values into value-checks."
+  [m]
+  (java.util.HashMap.
+   (into {}
+         (map (fn [[k v]]
+                {(if (keyword? k) (name k) k)
+                 (ExpectedAttributeValue.
+                  (if (or (nil? v) (true? v))
+                    (boolean v)
+                    (av v)))})
+              m))))
 
 ;; End of tools
-
 
 
 ;; ## Low level access
@@ -122,9 +157,9 @@ are :credentials and :endpoing. Both have defaults.
 For possible endpoints go to:
 http://docs.amazonwebservices.com/general/latest/gr/rande.html"
   [& params]
-  (let [{:keys [endpoint credentials]} params]
+  (let [{:keys [endpoint credentials]} (apply hash-map params)]
     (let [client (AmazonDynamoDBClient.
-                  (or (:credentials params) (default-credentials)))]
+                  (or credentials (default-credentials)))]
       (when endpoint (.setEndpoint client endpoint))
       {:db client
        :cu (atom 0)})))
@@ -183,6 +218,18 @@ http://docs.amazonwebservices.com/general/latest/gr/rande.html"
              :item item}))
 
 
+(defn update-item-request
+  [table key updates parmap]
+  (let [{:keys [expected return-values]} parmap
+        req (set-with (UpdateItemRequest.)
+                      {:table-name table
+                       :key key
+                       :attribute-updates updates})
+        req (if expected (set-with req {:expected (make-expected-attributes expected)}) req)
+        req (if return-values (set-with req {:return-values return-values}) req)
+        ]
+    req))
+
 (defn query-request [table hkv & params]
   (set-with (QueryRequest.)
             {:table-name table
@@ -204,15 +251,24 @@ http://docs.amazonwebservices.com/general/latest/gr/rande.html"
       (set-with ir
                 {:attributes-to-get
                  (collection-clojure-to-java
-                  (map name attributes))}))
+                  (map name (if (empty? attributes) [:nOSucH] attributes)))}))
     (when consistent-read
       (set-with ir
                 {:consistent-read consistent-read}))
     ir))
 
+(defn delete-item-request
+  [table key parmap]
+  (let [{:keys [expected return-values]} parmap
+        req (DeleteItemRequest. table key)
+        req (if expected (set-with req {:expected (make-expected-attributes expected)}) req)
+        req (if return-values (set-with req {:return-values return-values}) req)]
+    req))
 
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; The "DOERS"
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 
 (defn update-table-throughput [table-name r w]
   (set-with (update-table-request table-name)
@@ -223,27 +279,69 @@ http://docs.amazonwebservices.com/general/latest/gr/rande.html"
   (seq (.getTableNames
         (.listTables (:db client) (list-tables-request params)))))
 
+(defn delete-table
+  []
+  "FIXME")
+
+(defn update-item
+  "key is an (a-key ...), updates are a hash-map with values
+in the form [v a], where a i one of :add, :put, :delete."
+  [client table key updates & params]
+  (try
+    (when-let [uir (.updateItem
+                    (:db client)
+                    (update-item-request table (a-key key)
+                                         (make-update-attributes updates)
+                                         (apply hash-map params)))]
+      (inc-cu client (.getConsumedCapacityUnits uir))
+      (bean uir))
+    (catch ConditionalCheckFailedException e nil)))
+
 (defn put-item
   [client table item]
-  (when-let [pir (.putItem (:db client) (put-item-request table (make-item item)))]
+  (when-let [pir (.putItem (:db client)
+                           (put-item-request table (make-item item)))]
     (inc-cu client (.getConsumedCapacityUnits pir))
     (bean pir)))
 
+(defn delete-item
+  [client table key & params]
+  (try
+    (when-let [res (.deleteItem
+                    (:db client)
+                    (delete-item-request table (a-key key)
+                                         (apply hash-map params)))]
+      (inc-cu client (.getConsumedCapacityUnits res))
+      (bean res))
+    (catch ConditionalCheckFailedException e nil)))
 
 (defn get-item
   [client table kv & params]
   (when-let [gir (.getItem (:db client) (get-item-request table (a-key kv)
-                                       (apply hash-map params)))
+                                                          (apply hash-map params)))
              ;; -> GetItemResult
              ]
     (inc-cu client (.getConsumedCapacityUnits gir))
     (to-map
      (.getItem gir))))
 
+(defn batch-get-item
+  []
+  "FIXME")
+
+(defn query
+  []
+  "FIXME")
+
+(defn scan
+  []
+  "FIXME")
+
 
 (defn describe-table
   [client table]
   (try
+    ;; FIXME: check cu
     (bean (.getTable
            (.describeTable (:db client)
                            (set-with (DescribeTableRequest.)
@@ -258,6 +356,4 @@ http://docs.amazonwebservices.com/general/latest/gr/rande.html"
              (throughput r w))]
     (bean (.createTable client ctr))))
 
-;; TODO: delete-table
-;; 
 

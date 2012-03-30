@@ -10,9 +10,11 @@
 
 (defn default-credentials []
   "Returns the credentials stored in 'AwsCredentials.properties'."
-  (PropertiesCredentials.
-   (.getResourceAsStream (clojure.lang.RT/baseLoader)
-                         "AwsCredentials.properties")))
+  (let [cred (.getResourceAsStream (clojure.lang.RT/baseLoader)
+                                   "AwsCredentials.properties")]
+    (when-not cred
+      (throw (Exception. "AwsCredentials.properties not found in classpath")))
+    (PropertiesCredentials. cred)))
 
 
 (defn camelize
