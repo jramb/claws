@@ -1,6 +1,8 @@
 CLAWS - Clojure Library for Amazon Web Services
 ===============================================
 
+* Note: 2012-11-18: This is very, very unfinished and it might never be. Don't use it.
+
 Introduction
 ------------
 
